@@ -1,0 +1,108 @@
+---
+title: 'Standard Map Templates: Site Locator, Population, Hydrosheds, Topographic'
+author: "Murphy, S."
+date: "2024-09-16"
+output: 
+  github_document:
+    html_preview: FALSE
+    toc: TRUE
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE, htmltools.preserve.raw = FALSE)
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  error = FALSE, comment = NA, tidy.opts = list(width.cutoff = 6)
+) 
+
+requirements = c(
+  "pacman", "easypackages")
+
+setup <- function(requirements){
+  missing.packages <- requirements[!(requirements %in% installed.packages()[,"Package"])];
+  if(length(missing.packages)) {install.packages(
+    missing.packages, repos = "https://cloud.r-project.org/"); }
+  for(package_name in requirements){library(
+    package_name,character.only=TRUE,quietly=TRUE);
+  }
+}
+
+setup(requirements)
+
+#pacman::p_load(
+easypackages::packages(  
+  "aws.s3", 
+  "caret", "cli", "cols4all", "covr", "cowplot",
+  "dendextend", "digest","DiagrammeR","dtwclust", 
+  "e1071", "exactextractr", 
+  "FNN", "future",
+  "gdalcubes", "gdalUtilities", "geojsonsf","ggplot2","ggspatial",
+  "hdf5r", "httr", "httr2",
+  "jsonlite", 
+  "kohonen", 
+  "leafem", "libgeos","luz",
+  "mapedit", "mapview", "maptiles", "methods","mgcv", 
+  "ncdf4", "nnet", 
+  "openxlsx", 
+  "parallel",
+  "randomForest", "rasterVis", "raster", "Rcpp", "RcppArmadillo", "RcppCensSpatial", 
+  "RcppEigen", "RcppParallel", "RColorBrewer", "rsconnect","RStoolbox", "rts", 
+  "sf", "scales", "sits","spdep", "stars", "stringr","supercells", 
+  "terra", "testthat", "tidyverse","tools", "tmap", 
+  "xgboost"
+)
+```
+
+## Site Locator Map (1:70,000)
+
+##### Derive `aoi` & `bbox` from site boundary & national borders,
+
+```{r load-aoi, message=F, warning=F, error=F, comment=F}
+aoi_site   = sf::read_sf("./inputs/chilwa_watershed_4326.shp")
+aoi_malawi = giscoR::gisco_get_countries(country = "Malawi", resolution = "3")
+aoi_region = giscoR::gisco_get_countries(
+  country = c("Malawi", "Zambia", "Tanzania", "Mozambique"), resolution = "3"
+  )
+
+bbox_site  = terrainr::add_bbox_buffer(aoi_site, 20000, "meters")
+bbox_malawi  = terrainr::add_bbox_buffer(aoi_malawi, 400000, "meters")
+bbox_region = terra::vect(terra::ext(vect(aoi_region)) * 1.5) 
+crs(bbox_region) = "epsg:4326"
+```
+
+##### Download basemap tiles for higher res mapping,
+
+```{r download_basemap, message=F, warning=F, error=F, comment=F, eval=F}
+# 'zoom' = scale & resolution (https://wiki.openstreetmap.org/wiki/Zoom_levels)
+basemap_150k = maptiles::get_tiles(
+  bbox_site, 
+  zoom      = 12, 
+  crop      = T,
+  provider  = "OpenTopoMap"
+)
+
+tmap::tm_shape(basemap_150k) + tm_rgb() + 
+  tmap::tm_shape(aoi_site) +
+  tmap::tm_borders(lwd = 1, col = "red") +
+  tmap::tm_graticules(lines=T,labels.rot=c(0,90),lwd=0.2) +
+  tmap::tm_credits("EPSG:4326", position = c("left", "bottom")) + 
+  tmap::tm_scalebar(c(0, 10, 20, 40), position = c("right", "bottom"), text.size = .5) +
+  tmap::tm_compass(
+    type = "4star", size = 1.5,
+    color.dark = "gray60", text.color = "gray60",
+    position = c("left", "top")
+    ) -> fieldmap
+fieldmap
+
+# width & height = res, dpi = size of add-ons
+tmap::tmap_save(
+  fieldmap, "./outputs/map_locator_site.png", 
+  width=15120, height=15120, asp=0, dpi=2400
+  )
+```
+
+![](outputs/map_locator_site.png)
+
+
+## Country Locator Map
+
