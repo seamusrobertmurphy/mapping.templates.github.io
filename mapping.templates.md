@@ -1,15 +1,20 @@
-Standard Map Templates: Site Locator, Population, Hydrosheds,
-Topographic
-================
-Murphy, S.
-2024-09-16
+---
+title: 'Standard Map Templates: Site Locator, Population, Hydrosheds, Topographic'
+author: "Murphy, S."
+date: "2024-09-16"
+output: 
+  html_document:
+    keep_md: TRUE
+    toc: TRUE
+    toc_float: TRUE
+---
 
-- [Site Locator Map (1:70,000)](#site-locator-map-170000)
-- [Country Locator Map](#country-locator-map)
 
-## Site Locator Map (1:70,000)
 
-##### Derive `aoi` & `bbox` from site boundary & national borders,
+## Site Locator Map ^(1:70,000)^
+
+##### Derive `aoi` & `bbox` from site boundary & national borders
+
 
 ``` r
 aoi_site   = sf::read_sf("./inputs/chilwa_watershed_4326.shp")
@@ -19,15 +24,16 @@ aoi_region = giscoR::gisco_get_countries(
   )
 
 bbox_site  = terrainr::add_bbox_buffer(aoi_site, 20000, "meters")
-bbox_malawi  = terrainr::add_bbox_buffer(aoi_malawi, 400000, "meters")
-bbox_region = terra::vect(terra::ext(vect(aoi_region)) * 1.5) 
-crs(bbox_region) = "epsg:4326"
+bbox_malawi  = terrainr::add_bbox_buffer(aoi_malawi, 800000, "meters")
+vbox_malawi = terra::vect(terra::ext(vect(aoi_malawi)) * 1.6) 
+crs(vbox_malawi) = "epsg:4326"
 ```
 
-##### Download basemap tiles for higher res mapping,
+##### Download basemap `maptiles` with better resolution & details using `get_tiles` functions
+
 
 ``` r
-# 'zoom' = scale & resolution (https://wiki.openstreetmap.org/wiki/Zoom_levels)
+# 'zoom' = 12 sources at scale 1:70,000 (https://wiki.openstreetmap.org/wiki/Zoom_levels)
 basemap_150k = maptiles::get_tiles(
   bbox_site, 
   zoom      = 12, 
@@ -45,16 +51,48 @@ tmap::tm_shape(basemap_150k) + tm_rgb() +
     type = "4star", size = 1.5,
     color.dark = "gray60", text.color = "gray60",
     position = c("left", "top")
-    ) -> fieldmap
-fieldmap
+    ) -> map_locator_site
+map_locator_site
 
-# width & height = res, dpi = size of add-ons
 tmap::tmap_save(
-  fieldmap, "./outputs/map_locator_site.png", 
+  map_locator_site, "./outputs/map_locator_site.png", 
   width=15120, height=15120, asp=0, dpi=2400
   )
 ```
 
 ![](outputs/map_locator_site.png)
 
-## Country Locator Map
+::: {#site_locator_map_final} :::
+
+## Country Locator Map ^(1:4,000,000)^
+
+
+``` r
+# zoom = 7 sources basemap at scale of 1:4,000,000
+basemap_4m = maptiles::get_tiles(
+  vbox_malawi, 
+  zoom      = 7, 
+  crop      = T,
+  provider  = "OpenStreetMap"
+)
+
+tmap::tm_shape(basemap_4m) + tm_rgb(alpha=0.2) + 
+  tmap::tm_shape(aoi_region) +
+  tmap::tm_borders(lwd = 0.5, col = "black") +
+  tmap::tm_shape(aoi_site) +
+  tmap::tm_borders(lwd = 2, col = "red", fill="#e28672", fill_alpha=0.5) +
+  tmap::tm_graticules(lines=T,labels.rot=c(0,90),lwd=0.2) +
+  tmap::tm_compass(
+    type = "4star", size = 1.5,
+    color.dark = "black", text.color = "gray60",
+    position = c("left", "bottom")) +
+  tmap::tm_scalebar(c(0, 50, 100, 200), position = c("right", "bottom"), text.size=0.6) +
+  tm_credits("EPSG:4326") -> map_locator_country
+map_locator_country
+
+tmap::tmap_save(map_locator_country, "./outputs/map_locator_country.png")
+```
+
+![](outputs/map_locator_country.png)
+
+#basemaps tm_shape(bg) + tm_rgb() + #points tm_shape(points) + tm_symbols() + #inset of points with basemap tm_inset(bbox = bbox, position = c('top', 'right), frame = TRUE, frame.lwd = 2, ...)
