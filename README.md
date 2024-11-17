@@ -1,5 +1,5 @@
 # Mapping Templates: Topo, Hydro, Landcover, Population, Locator Maps'
-##### Murphy, S.; date: "2024-09-16"
+##### Murphy, S.; "2024-09-16"
 
 
 ## Load AOI & Borders
