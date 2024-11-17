@@ -1,5 +1,5 @@
 ---
-title: 'Mapping Templates: Topo, Hydro, Landcover, Population, Locator Maps'
+title: 'Mapping Templates'
 author: "Murphy, S."
 date: "2024-09-16"
 output: 
@@ -49,24 +49,25 @@ easypackages::packages(
   "randomForest", "rasterVis", "raster", "Rcpp", "RcppArmadillo", "RcppCensSpatial", 
   "RcppEigen", "RcppParallel", "RColorBrewer", "rsconnect","RStoolbox", "rts", 
   "sf", "scales", "sits","spdep", "stars", "stringr","supercells", 
-  "terra", "testthat", "tidyverse","tools", "tmap", 
+  "terra", "testthat", "tidyverse","tools", "tmap", "tmaptools",
   "xgboost", "grid", "mapinsetr"
 )
 ```
 
-## Load AOI & Borders
+## AOIs & BBOXs
 
-Derive `aoi` & `bbox` from site polygons & national datasets
+Derive `aoi` & `bbox` objects at preferred scales from site polygons & open source datasets.
 
 ```{r load-aoi, message=F, warning=F, error=F, comment=F}
 aoi_site   = sf::read_sf("./inputs/chilwa_watershed_4326.shp")
 aoi_malawi = giscoR::gisco_get_countries(country = "Malawi", resolution = "3")
+aoi_malawi_vect  = vect(aoi_malawi)
 aoi_region = giscoR::gisco_get_countries(
   country = c("Malawi", "Zambia", "Tanzania", "Mozambique"), resolution = "3"
   )
 
 bbox_site  = terrainr::add_bbox_buffer(aoi_site, 20000, "meters")
-vbox_malawi = terra::vect(terra::ext(vect(aoi_malawi)) * 1.4) 
+vbox_malawi = terra::vect(terra::ext(vect(aoi_malawi)) * 1.6) 
 crs(vbox_malawi) = "epsg:4326"
 bbox_malawi = st_bbox(vbox_malawi)
 ```
@@ -154,12 +155,64 @@ ggsave("./outputs/map_locator_inset.png", map_locator_inset)
 ## Population Map
 
 ```{r population_map, message=F, warning=F, error=F, comment=F, eval=F}
-tm_shape(states) +
-tm_polygons(col="POP05_SQMI", title="People/Sq. Mi.", style="quantile", palette=get_brewer_pal(palette="OrRd", n=5, plot=FALSE))+
-tm_compass(position = c("left", "bottom"))+
-tm_scale_bar(position = c("left", "bottom"))+
-tm_layout(main.title = "Population Density", title.size = 1.5, 
-title.position = c("right", "top"), 
-legend.outside=FALSE, legend.position= c("right", "bottom"))+
-tm_text("STATE_ABBR", size="AREA")
+# best download available in 1x1km raster format (person/km^2)
+url1 <- "https://jeodpp.jrc.ec.europa.eu/ftp/jrc-opendata/GHSL/GHS_POP_GLOBE_R2023A/GHS_POP_E2025_GLOBE_R2023A_54009_1000/V1-0/GHS_POP_E2025_GLOBE_R2023A_54009_1000_V1_0.zip"
+url2 <- "https://data.hydrosheds.org/file/hydrosheds-v1-msk/hyd_glo_msk_15s.zip"
+#download.file(url = url, path = getwd(), destfile = file_name)
+pop <- terra::rast("/Users/seamus/Repos/datasets/population/GHS_POP_E2030_GLOBE_R2023A_54009_1000_V1_0/GHS_POP_E2030_GLOBE_R2023A_54009_1000_V1_0.tif") 
+mask = terra::rast('~/Repos/datasets/hydrography/hyd_glo_msk_15s/hyd_glo_msk_15s.tif')
+
+# reproject to fix NAs found in output, long processing time
+pop <- terra::project(pop, crs(aoi_malawi_vect))
+pop = terra::crop(pop, aoi_malawi_vect, snap = "in", mask = T)
+#mask <- terra::project(mask, crs(pop))
+#mask = terra::resample(mask, pop)
+#mask = terra::crop(mask, aoi_malawi_vect, snap = "in", mask = T)
+# alternatively project from sf to rast :: 
+# aoi_malawi = st_transform(aoi_malawi, st_crs(pop))
+#pop = mask(pop, mask, inverse = TRUE)
+names(pop)[1] <- "density_km" # number of persons per sq kilometer
+
+aoi_malawi = st_transform(aoi_malawi, st_crs(pop))
+
+tmap::tm_shape(aoi_malawi) +
+  tmap::tm_borders(lwd=0) +
+  tmap::tm_shape(pop) +
+  tm_raster(
+    style    = "fixed", 
+    alpha    = 1, 
+    palette  = "OrRd", 
+    title    = "People/Km^2", 
+    breaks   = c(0 , 0.01, 10, 100, 200, 1000, 2000, 50000)
+    ) + 
+  tmap::tm_shape(aoi_region) +
+  tmap::tm_borders(lwd = 0.5, col = "black") +
+  tmap::tm_shape(aoi_site) +
+  tmap::tm_borders(lwd = 1, col = "darkgray", fill_alpha=0.5) +
+  tmap::tm_compass(
+    type       = "4star", 
+    size       = 1,
+    color.dark = "gray60", 
+    text.color = "gray60",
+    position   = c("RIGHT", "TOP")
+  ) +
+  tm_layout(
+    main.title      = "Population Density", 
+    title.size      = 1, 
+    title.position  = c("LEFT", "top"), 
+    legend.outside  = FALSE, 
+    legend.position = c("right", "bottom")) + 
+    tmap::tm_graticules(lines=T,labels.rot=c(0,90),lwd=0.2) +
+  tmap::tm_credits("EPSG:4326", position = c("left", "bottom")) + 
+  tmap::tm_scalebar(c(0, 50, 100, 200), position = c("LEFT", "BOTTOM"), text.size = .5) -> map_population
+
+tmap::tmap_save(
+  map_population, "./outputs/map_population.png", 
+  width=15120, height=15120, asp=0, dpi=2400
+  )  
 ```
+
+![](outputs/map_population.png)
+
+## Watershed Map
+
