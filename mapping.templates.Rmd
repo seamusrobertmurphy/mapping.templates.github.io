@@ -1,5 +1,5 @@
 ---
-title: 'Standard Map Templates: Site Locator, Population, Hydrosheds, Topographic'
+title: 'Mapping Templates: Topo, Hydro, Landcover, Population, Locator Maps'
 author: "Murphy, S."
 date: "2024-09-16"
 output: 
@@ -54,9 +54,9 @@ easypackages::packages(
 )
 ```
 
-## Site Locator Map ^(1:70,000)^
+## Load AOI & Borders
 
-##### Derive `aoi` & `bbox` from site boundary & national borders
+Derive `aoi` & `bbox` from site polygons & national datasets
 
 ```{r load-aoi, message=F, warning=F, error=F, comment=F}
 aoi_site   = sf::read_sf("./inputs/chilwa_watershed_4326.shp")
@@ -71,7 +71,9 @@ crs(vbox_malawi) = "epsg:4326"
 bbox_malawi = st_bbox(vbox_malawi)
 ```
 
-##### Download basemap `maptiles` with better resolution & details using `get_tiles` functions
+## Site Map
+
+We source higher-res basemaps from `maptiles` using `get_tiles` functions
 
 ```{r site_basemap, message=F, warning=F, error=F, comment=F, eval=F}
 # 'zoom' = 12 scales to 1:70,000 (https://wiki.openstreetmap.org/wiki/Zoom_levels)
@@ -95,6 +97,7 @@ tmap::tm_shape(basemap_150k) + tm_rgb() +
     ) -> map_locator_site
 map_locator_site
 
+# width & height controls resolution of output, dpi affects 'attributes' sizes
 tmap::tmap_save(
   map_locator_site, "./outputs/map_locator_site.png", 
   width=15120, height=15120, asp=0, dpi=2400
@@ -103,9 +106,7 @@ tmap::tmap_save(
 
 ![](outputs/map_locator_site.png)
 
-::: {#site_locator_map_final} :::
-
-## Country Locator Map ^(1:4,000,000)^
+## Locator Map
 
 ```{r country_basemap, message=F, warning=F, error=F, comment=F, eval=F}
 # zoom = 8 sources basemap at scale of 1:2,000,000
@@ -133,6 +134,8 @@ tmap::tmap_save(map_locator_country, "./outputs/map_locator_country.png")
 
 ![](outputs/map_locator_country.png)
 
+## Inset Map
+
 ```{r inset_basemap, message=F, warning=F, error=F, comment=F, eval=F}
 main_map = tmap::tmap_grob(map_locator_site)
 inset_map = tmap::tmap_grob(map_locator_country)
@@ -147,3 +150,16 @@ ggsave("./outputs/map_locator_inset.png", map_locator_inset)
 ```
 
 ![](outputs/map_locator_inset.png)
+
+## Population Map
+
+```{r population_map, message=F, warning=F, error=F, comment=F, eval=F}
+tm_shape(states) +
+tm_polygons(col="POP05_SQMI", title="People/Sq. Mi.", style="quantile", palette=get_brewer_pal(palette="OrRd", n=5, plot=FALSE))+
+tm_compass(position = c("left", "bottom"))+
+tm_scale_bar(position = c("left", "bottom"))+
+tm_layout(main.title = "Population Density", title.size = 1.5, 
+title.position = c("right", "top"), 
+legend.outside=FALSE, legend.position= c("right", "bottom"))+
+tm_text("STATE_ABBR", size="AREA")
+```
