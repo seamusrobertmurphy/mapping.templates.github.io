@@ -1,5 +1,5 @@
 ---
-title: 'Standard Map Templates: Site Locator, Population, Hydrosheds, Topographic'
+title: 'Mapping Templates: Topo, Hydro, Landcover, Population, Locator Maps'
 author: "Murphy, S."
 date: "2024-09-16"
 output: 
@@ -11,9 +11,9 @@ output:
 
 
 
-## Site Locator Map ^(1:70,000)^
+## Load AOI & Borders
 
-##### Derive `aoi` & `bbox` from site boundary & national borders
+Derive `aoi` & `bbox` from site polygons & national datasets
 
 
 ``` r
@@ -24,16 +24,18 @@ aoi_region = giscoR::gisco_get_countries(
   )
 
 bbox_site  = terrainr::add_bbox_buffer(aoi_site, 20000, "meters")
-bbox_malawi  = terrainr::add_bbox_buffer(aoi_malawi, 800000, "meters")
-vbox_malawi = terra::vect(terra::ext(vect(aoi_malawi)) * 1.6) 
+vbox_malawi = terra::vect(terra::ext(vect(aoi_malawi)) * 1.4) 
 crs(vbox_malawi) = "epsg:4326"
+bbox_malawi = st_bbox(vbox_malawi)
 ```
 
-##### Download basemap `maptiles` with better resolution & details using `get_tiles` functions
+## Site Map
+
+We source higher-res basemaps from `maptiles` using `get_tiles` functions
 
 
 ``` r
-# 'zoom' = 12 sources at scale 1:70,000 (https://wiki.openstreetmap.org/wiki/Zoom_levels)
+# 'zoom' = 12 scales to 1:70,000 (https://wiki.openstreetmap.org/wiki/Zoom_levels)
 basemap_150k = maptiles::get_tiles(
   bbox_site, 
   zoom      = 12, 
@@ -54,6 +56,7 @@ tmap::tm_shape(basemap_150k) + tm_rgb() +
     ) -> map_locator_site
 map_locator_site
 
+# width & height controls resolution of output, dpi affects 'attributes' sizes
 tmap::tmap_save(
   map_locator_site, "./outputs/map_locator_site.png", 
   width=15120, height=15120, asp=0, dpi=2400
@@ -62,32 +65,28 @@ tmap::tmap_save(
 
 ![](outputs/map_locator_site.png)
 
-::: {#site_locator_map_final} :::
-
-## Country Locator Map ^(1:4,000,000)^
+## Locator Map
 
 
 ``` r
-# zoom = 7 sources basemap at scale of 1:4,000,000
+# zoom = 8 sources basemap at scale of 1:2,000,000
 basemap_4m = maptiles::get_tiles(
   vbox_malawi, 
-  zoom      = 7, 
+  zoom      = 8, 
   crop      = T,
-  provider  = "OpenStreetMap"
+  provider  = "CartoDB.Positron"
 )
 
 tmap::tm_shape(basemap_4m) + tm_rgb(alpha=0.2) + 
   tmap::tm_shape(aoi_region) +
-  tmap::tm_borders(lwd = 0.5, col = "black") +
+  tmap::tm_borders(lwd = 0.4, col = "black") +
   tmap::tm_shape(aoi_site) +
   tmap::tm_borders(lwd = 2, col = "red", fill="#e28672", fill_alpha=0.5) +
-  tmap::tm_graticules(lines=T,labels.rot=c(0,90),lwd=0.2) +
   tmap::tm_compass(
-    type = "4star", size = 1.5,
-    color.dark = "black", text.color = "gray60",
-    position = c("left", "bottom")) +
-  tmap::tm_scalebar(c(0, 50, 100, 200), position = c("right", "bottom"), text.size=0.6) +
-  tm_credits("EPSG:4326") -> map_locator_country
+    type = "4star", size = 1,
+    color.dark = "gray60", text.color = "gray60",
+    position = c("RIGHT", "TOP")
+    ) -> map_locator_country
 map_locator_country
 
 tmap::tmap_save(map_locator_country, "./outputs/map_locator_country.png")
@@ -95,4 +94,34 @@ tmap::tmap_save(map_locator_country, "./outputs/map_locator_country.png")
 
 ![](outputs/map_locator_country.png)
 
-#basemaps tm_shape(bg) + tm_rgb() + #points tm_shape(points) + tm_symbols() + #inset of points with basemap tm_inset(bbox = bbox, position = c('top', 'right), frame = TRUE, frame.lwd = 2, ...)
+## Inset Map
+
+
+``` r
+main_map = tmap::tmap_grob(map_locator_site)
+inset_map = tmap::tmap_grob(map_locator_country)
+
+map_locator_inset = ggdraw() +
+  draw_plot(main_map) +
+  draw_plot(inset_map, x = -0.39, y=0.2, height = 0.70)
+map_locator_inset
+
+ggsave("./outputs/map_locator_inset.png", map_locator_inset)
+#plot_grid(inset_map,main_map,nrow=1)
+```
+
+![](outputs/map_locator_inset.png)
+
+## Population Map
+
+
+``` r
+tm_shape(states) +
+tm_polygons(col="POP05_SQMI", title="People/Sq. Mi.", style="quantile", palette=get_brewer_pal(palette="OrRd", n=5, plot=FALSE))+
+tm_compass(position = c("left", "bottom"))+
+tm_scale_bar(position = c("left", "bottom"))+
+tm_layout(main.title = "Population Density", title.size = 1.5, 
+title.position = c("right", "top"), 
+legend.outside=FALSE, legend.position= c("right", "bottom"))+
+tm_text("STATE_ABBR", size="AREA")
+```
